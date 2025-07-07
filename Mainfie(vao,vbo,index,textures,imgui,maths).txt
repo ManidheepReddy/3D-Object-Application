@@ -1,0 +1,173 @@
+#include <iostream>
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
+#include <fstream>
+#include <string>
+#include "Renderer.h"
+#include "VertexBuffer.h"
+#include "IndexBuffer.h"
+#include "VertexArray.h"
+#include "VertexBufferLayout.h"
+#include "Shader.h"
+#include "Texture.h"
+#include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw_gl3.h"
+
+
+int main(void)
+{
+    GLFWwindow* window;
+
+    /* Initialize the library */
+    if (!glfwInit())
+        return -1;
+
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);  
+
+
+    /* Create a windowed mode window and its OpenGL context */
+    window = glfwCreateWindow(960, 540, "Hello World", NULL, NULL);
+    if (!window)
+    {
+        glfwTerminate();
+        return -1;
+    }
+
+    /* Make the window's context current */
+    glfwMakeContextCurrent(window);
+
+    glfwSwapInterval(1); // Enable vsync
+
+    if (glewInit() != GLEW_OK)
+    {
+        std::cout << " I DONT DESERVE THIS" << std::endl;
+        return 0;
+    }
+
+
+
+    std::cout << glGetString(GL_VERSION) << std::endl;
+    
+    float vertices[] = {
+        -50.0f, -50.0f, 0.0f, 0.0f, // Bottom Left
+         50.0f, -50.0f, 1.0f, 0.0f,// Bottom Right
+         50.0f, 50.0f, 1.0f, 1.0f,// Top Right
+        -50.0f, 50.0f, 0.0f, 1.0f// Top Left
+    };
+
+    unsigned int indices[] = {
+        0, 1, 2, // First Triangle
+        2, 3, 0  // Second Triangle
+    };
+
+	GLCall(glEnable(GL_BLEND));
+	GLCall(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+
+	VertexArray vao;
+    VertexBuffer vb(vertices, sizeof(vertices));
+	VertexBufferLayout layout;
+	layout.Push<float>(2); // Position coordinates
+	layout.Push<float>(2); // Texture coordinates
+	vao.AddBuffer(vb, layout);
+
+
+    IndexBuffer ibo(indices, sizeof(indices) / sizeof(unsigned int));
+
+	glm::mat4 proj = glm::ortho(0.0f, 960.0f, 0.0f, 540.0f, -1.0f, 1.0f);
+	glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0));//obj moves by -100 and camera moves by +100
+    // Combine projection and view matrices
+
+	Shader shader("OpenGL\\res\\shaders\\vertex.shader", "OpenGL\\res\\shaders\\fragment.shader");
+	shader.Bind();
+
+
+   
+
+    //uniform requires a shader to be bound before it can be set
+	shader.SetUniform4f("u_Color", 0.2f, 0.9f, 0.2f, 1.0f);
+ // Set the projection matrix uniform
+
+	Texture texture("OpenGL\\res\\textures\\Flower3.png");
+	texture.Bind(); // Bind the texture to the default texture unit (0)
+	shader.SetUniform1i("u_Texture", 0); // Set the uniform to use texture unit 0
+
+    vao.Unbind();
+	shader.Unbind();
+	vb.Unbind();
+	ibo.Unbind();   
+
+	Renderer renderer;
+
+    ImGui::CreateContext();
+
+    ImGui_ImplGlfwGL3_Init(window, true);
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+
+    glm::vec3 translationA(200, 200, 0);
+    glm::vec3 translationB(400, 200, 0);
+
+    //ImGui::StyleColorsLight();
+
+    // Setup Platform/Renderer backends
+    
+
+
+
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+    float increment = 0.05f;
+    /* Loop until the user closes the window */
+    while (!glfwWindowShouldClose(window))
+    {
+        /* Render here */
+		renderer.Clear(); // Clear the screen
+
+        ImGui_ImplGlfwGL3_NewFrame();
+
+		shader.Bind();
+     
+        {
+            //shader.SetUniform4f("u_Color", r, g, b, 0.5f); // Set the uniform color and uniforms are set perdraw call
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), translationA);
+            glm::mat4 mvp = proj * view * model;
+            shader.SetUniformMat4f("u_MVP", mvp);
+            renderer.Draw(vao, ibo, shader);
+        }
+        // Draw the triangle
+        {
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), translationB);
+            glm::mat4 mvp = proj * view * model;
+            shader.SetUniformMat4f("u_MVP", mvp);
+            renderer.Draw(vao, ibo, shader);
+        }
+
+        if (r >= 1.0f)
+            increment = -0.05f;
+        else if (r <= 0.0f)
+            increment = 0.05f;
+        r += increment;
+
+
+        {
+            ImGui::SliderFloat3("TranslationA", &translationA.x, 0.0f, 960.0f );
+            ImGui::SliderFloat3("TranslationB", &translationB.x, 0.0f, 960.0f);            // Edit 1 float using a slider from 0.0f to 1.0f    
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        }
+        ImGui::Render();
+        ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
+
+        /* Swap front and back buffers */
+        GLCall(glfwSwapBuffers(window));
+
+        /* Poll for and process events */
+        GLCall(glfwPollEvents());
+    }
+
+    ImGui_ImplGlfwGL3_Shutdown();
+    ImGui::DestroyContext();
+    glfwTerminate();
+    return 0;
+}
